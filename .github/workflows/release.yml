@@ -58,6 +58,22 @@ jobs:
           echo "--- index_html.h size ---"
           ls -lh ESP32CAM-ONVIF/index_html.h
 
+      
+      - name: Fix SPIFFS data directory
+        run: |
+          echo "Repository root:"
+          pwd
+          echo "Web UI data directory:"
+          ls -la ESP32CAM-ONVIF/data
+
+          if [ ! -e data ] && [ ! -L data ]; then
+            ln -s ESP32CAM-ONVIF/data data
+          fi
+
+          echo "SPIFFS source directory:"
+          ls -la data
+          test -d data
+
       - name: Build Firmware (esp32cam)
         run: pio run -e esp32cam
 
