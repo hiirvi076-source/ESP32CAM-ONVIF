@@ -80,6 +80,20 @@ jobs:
       - name: Build SPIFFS Filesystem Image
         run: pio run -e esp32cam -t buildfs
 
+      
+      - name: Collect all flash binaries
+        run: |
+          mkdir -p flash-files
+          cp .pio/build/esp32cam/bootloader.bin flash-files/
+          cp .pio/build/esp32cam/partitions.bin flash-files/
+          cp .pio/build/esp32cam/firmware.bin flash-files/
+          cp .pio/build/esp32cam/spiffs.bin flash-files/
+          echo "Boot app file candidates:"
+          find ~/.platformio/packages -name boot_app0.bin
+          echo "Collected files:"
+          ls -lh flash-files/
+
+
       - name: Rename build artifacts
         run: |
           cp .pio/build/esp32cam/firmware.bin esp32cam-onvif-${{ env.VERSION }}.bin
