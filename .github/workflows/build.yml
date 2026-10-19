@@ -1,0 +1,115 @@
+
+name: Build ESP32CAM-ONVIF - AI Thinker
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build.yml'
+      - 'platformio.ini'
+      - 'ESP32CAM-ONVIF/**'
+      - 'boards/**'
+      - 'huge_app.csv'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build complete ESP32-CAM firmware
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Create 4MB partition table
+        shell: bash
+        run: |
+          cat > huge_app.csv <<'EOF'
+          # Name,   Type, SubType, Offset,   Size, Flags
+          nvs,      data, nvs,     0x9000,   0x5000,
+          otadata,  data, ota,     0xe000,   0x2000,
+          app0,     app,  factory, 0x10000,  0x300000,
+          spiffs,   data, spiffs,  0x310000, 0xF0000,
+          EOF
+
+      - name: Build firmware
+        run: pio run -e esp32cam
+
+      - name: Prepare full flashing package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OUT="release/ESP32CAM-ONVIF-AI-Thinker"
+          BUILD=".pio/build/esp32cam"
+          mkdir -p "$OUT"
+
+          test -s "$BUILD/firmware.bin"
+          test -s "$BUILD/bootloader.bin"
+          test -s "$BUILD/partitions.bin"
+
+          cp "$BUILD/firmware.bin" "$OUT/firmware.bin"
+          cp "$BUILD/bootloader.bin" "$OUT/bootloader.bin"
+          cp "$BUILD/partitions.bin" "$OUT/partitions.bin"
+
+          BOOT_APP0="$(find "$HOME/.platformio/packages" \
+            -type f -name boot_app0.bin -print -quit)"
+
+          test -n "$BOOT_APP0"
+          test -s "$BOOT_APP0"
+          cp "$BOOT_APP0" "$OUT/boot_app0.bin"
+
+          cp huge_app.csv "$OUT/huge_app.csv"
+
+          cat > "$OUT/flash_args.txt" <<'EOF'
+          0x1000   bootloader.bin
+          0x8000   partitions.bin
+          0xe000   boot_app0.bin
+          0x10000  firmware.bin
+          EOF
+
+          cat > "$OUT/README.txt" <<'EOF'
+          ESP32CAM-ONVIF - AI Thinker ESP32-CAM
+          Target: classic ESP32, 4MB flash, OV2640, PSRAM.
+
+          FLASH FROM ZERO:
+          1. Erase flash first if changing from another firmware.
+          2. Flash these files at the exact addresses in flash_args.txt.
+          3. Use 115200 baud initially.
+          4. Reset the board after flashing.
+
+          IMPORTANT:
+          This package uses a custom 4MB partition table.
+          Do not use firmware.bin at address 0x0.
+          Do not use a partition table from another firmware.
+          WiFi setup and AP credentials depend on the source config.
+          See the serial log at 115200 baud after first boot.
+          EOF
+
+          (
+            cd release
+            zip -r ESP32CAM-ONVIF-AI-Thinker.zip \
+              ESP32CAM-ONVIF-AI-Thinker
+          )
+
+      - name: Upload firmware package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ESP32CAM-ONVIF-AI-Thinker
+          path: |
+            release/ESP32CAM-ONVIF-AI-Thinker.zip
+            release/ESP32CAM-ONVIF-AI-Thinker/
+          if-no-files-found: error
+          retention-days: 30
