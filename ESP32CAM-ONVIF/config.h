@@ -89,8 +89,8 @@
 
 // --- WiFi Station Mode Settings ---
 // Set these to your local network for automatic connection
-#define WIFI_SSID "YOUR_WIFI_SSID"
-#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+#define WIFI_SSID "OpenWrt"
+#define WIFI_PASSWORD "trikolor"
 
 // --- Access Point (AP) Fallback Settings ---
 // If WiFi connection fails, device creates its own network
