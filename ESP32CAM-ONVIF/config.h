@@ -89,8 +89,8 @@
 
 // --- WiFi Station Mode Settings ---
 // Set these to your local network for automatic connection
-#define WIFI_SSID " OpenWrt "
-#define WIFI_PASSWORD " trikolor "
+#define WIFI_SSID "OpenWrt"
+#define WIFI_PASSWORD "trikolor"
 
 // --- Access Point (AP) Fallback Settings ---
 // If WiFi connection fails, device creates its own network
@@ -99,9 +99,9 @@
 
 // --- Static IP Configuration [OPTIONAL] ---
 // Set STATIC_IP_ENABLED to false to use DHCP (automatic IP)
-#define STATIC_IP_ENABLED false // Set to true for static IP
-#define STATIC_IP_ADDR 192, 168, 0, 150
-#define STATIC_GATEWAY 192, 168, 0, 1
+#define STATIC_IP_ENABLED true // Set to true for static IP
+#define STATIC_IP_ADDR 192, 168, 1, 110
+#define STATIC_GATEWAY 192, 168, 1, 1
 #define STATIC_SUBNET 255, 255, 255, 0
 #define STATIC_DNS 8, 8, 8, 8
 
