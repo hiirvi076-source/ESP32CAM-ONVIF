@@ -99,7 +99,7 @@
 
 // --- Static IP Configuration [OPTIONAL] ---
 // Set STATIC_IP_ENABLED to false to use DHCP (automatic IP)
-#define STATIC_IP_ENABLED true // Set to true for static IP
+#define STATIC_IP_ENABLED false // Set to true for static IP
 #define STATIC_IP_ADDR 192, 168, 1, 110
 #define STATIC_GATEWAY 192, 168, 1, 1
 #define STATIC_SUBNET 255, 255, 255, 0
@@ -152,7 +152,7 @@
 // ⚠️ WARNING: GPIO 4 (AI-Thinker) conflicts with SD Card Data1 line.
 //   - If FLASH_LED_ENABLED = true, SD card MUST use 1-bit mode
 //   - DISABLED by default for maximum compatibility
-#define FLASH_LED_ENABLED true  // Enable flash LED (set true if supported)
+#define FLASH_LED_ENABLED false  // Enable flash LED (set true if supported)
 #define FLASH_LED_INVERT false   // false = High is ON (board-specific)
 #define DEFAULT_AUTO_FLASH true // Auto-enable flash in low light
 // Note: FLASH_LED_PIN is defined per-board in board_config.h
@@ -160,7 +160,7 @@
 // --- Status LED Settings ---
 // ⚠️ WARNING: Not all boards have a status LED. Check your board schematic.
 //   - DISABLED by default to prevent conflicts
-#define STATUS_LED_ENABLED true // Enable status LED (set true if supported)
+#define STATUS_LED_ENABLED false // Enable status LED (set true if supported)
 #define STATUS_LED_INVERT true   // true = Low is ON (common anode LED)
 // Note: STATUS_LED_PIN is defined per-board in board_config.h
 
