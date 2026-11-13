@@ -1,0 +1,174 @@
+name: Build and Release Firmware (AI Thinker ESP32-CAM)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Firmware Version (e.g. 1.4.0)'
+        required: true
+        default: 'manual'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install --upgrade platformio
+
+      - name: Determine Version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            V="${{ github.event.inputs.version }}"
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=$V" >> $GITHUB_ENV
+          echo "TAG_NAME=v$V" >> $GITHUB_ENV
+
+      - name: Update Firmware Version in config.h
+        run: |
+          sed -i "s/#define FIRMWARE_VERSION \".*\"/#define FIRMWARE_VERSION \"v$VERSION\"/" ESP32CAM-ONVIF/config.h
+          grep FIRMWARE_VERSION ESP32CAM-ONVIF/config.h
+
+      - name: Rebuild Web UI (index_html.h)
+        run: |
+          python utils/build_web.py
+          ls -lh ESP32CAM-ONVIF/index_html.h
+
+      - name: Fix SPIFFS data directory
+        run: |
+          if [ ! -e data ] && [ ! -L data ]; then ln -s ESP32CAM-ONVIF/data data; fi
+          ls -la data && test -d data
+
+      - name: Create custom 4MB partition table (SPIFFS included)
+        run: |
+          cat > huge_app.csv <<'EOF'
+          # Name,   Type, SubType, Offset,   Size, Flags
+          nvs,      data, nvs,     0x9000,   0x5000,
+          otadata,  data, ota,     0xe000,   0x2000,
+          app0,     app,  factory, 0x10000,  0x300000,
+          spiffs,   data, spiffs,  0x310000, 0xF0000,
+          EOF
+          cat huge_app.csv
+
+      - name: Build Firmware
+        run: pio run -e esp32cam
+
+      - name: Build SPIFFS filesystem image
+        run: pio run -e esp32cam -t buildfs
+
+      - name: Package all five flash files
+        run: |
+          set -euo pipefail
+          OUT="release/ESP32CAM-ONVIF-AI-Thinker"
+          BUILD=".pio/build/esp32cam"
+          mkdir -p "$OUT"
+
+          cp "$BUILD/bootloader.bin" "$OUT/bootloader.bin"
+          cp "$BUILD/partitions.bin" "$OUT/partitions.bin"
+          cp "$BUILD/firmware.bin"   "$OUT/firmware.bin"
+          cp "$BUILD/spiffs.bin"     "$OUT/spiffs.bin"
+
+          BOOT_APP0="$(find "$HOME/.platformio/packages" -type f -name boot_app0.bin -print -quit)"
+          test -n "$BOOT_APP0" && test -s "$BOOT_APP0"
+          cp "$BOOT_APP0" "$OUT/boot_app0.bin"
+
+          cp huge_app.csv "$OUT/huge_app.csv"
+
+          cat > "$OUT/flash_args.txt" <<'EOF'
+          # ESP32-CAM (AI Thinker) — esptool flash addresses
+          0x1000     bootloader.bin
+          0x8000     partitions.bin
+          0xe000     boot_app0.bin
+          0x10000    firmware.bin
+          0x310000   spiffs.bin
+          EOF
+
+          cat > "$OUT/README.txt" <<'EOF'
+          ESP32CAM-ONVIF — AI Thinker ESP32-CAM (ESP32, 4MB flash, OV2640, PSRAM)
+
+          FILES (5):
+            bootloader.bin   @ 0x1000
+            partitions.bin   @ 0x8000
+            boot_app0.bin    @ 0xe000
+            firmware.bin     @ 0x10000
+            spiffs.bin       @ 0x310000
+
+          PARTITION TABLE (4MB):
+            nvs      0x9000   20 KB
+            otadata  0xe000    8 KB
+            app0     0x10000   3 MB   (factory)
+            spiffs   0x310000  960 KB
+
+          FLASH:
+            esptool.py --chip esp32 --port COM3 --baud 460800 write_flash -z \
+              0x1000 bootloader.bin \
+              0x8000 partitions.bin \
+              0xe000 boot_app0.bin \
+              0x10000 firmware.bin \
+              0x310000 spiffs.bin
+
+          NOTES:
+            - Erase flash first if switching from another firmware.
+            - 460800 baud OK; fall back to 115200 if it fails.
+            - Reset board after flashing. Wait ~10 s.
+            - First boot: AP mode. Connect to ESP32-..., open http://192.168.4.1,
+              configure router WiFi + credentials in the Web UI.
+            - Settings survive reboots thanks to the SPIFFS partition.
+            - OTA is disabled in this build (factory partition).
+          EOF
+
+          ls -lh "$OUT"
+          (cd "$OUT" && sha256sum *.bin)
+          (cd release && zip -r ESP32CAM-ONVIF-AI-Thinker.zip ESP32CAM-ONVIF-AI-Thinker)
+
+      - name: Create Release (tagged push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/ESP32CAM-ONVIF-AI-Thinker/bootloader.bin
+            release/ESP32CAM-ONVIF-AI-Thinker/partitions.bin
+            release/ESP32CAM-ONVIF-AI-Thinker/boot_app0.bin
+            release/ESP32CAM-ONVIF-AI-Thinker/firmware.bin
+            release/ESP32CAM-ONVIF-AI-Thinker/spiffs.bin
+            release/ESP32CAM-ONVIF-AI-Thinker.zip
+          name: "ESP32-CAM ONVIF v${{ env.VERSION }} (AI Thinker)"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## ESP32-CAM ONVIF v${{ env.VERSION }} — AI Thinker
+
+            ### 5 files for full flash (4 MB, factory + SPIFFS)
+            | Offset | File |
+            |---|---|
+            | `0x1000` | `bootloader.bin` |
+            | `0x8000` | `partitions.bin` |
+            | `0xe000` | `boot_app0.bin` |
+            | `0x10000` | `firmware.bin` |
+            | `0x310000` | `spiffs.bin` |
+
+            ```bash
+            esptool.py --chip esp32 --port COM3 --baud 460800 write_flash -z \
+              0x1000 bootloader.bin \
+              0x8000 partitions.bin \
+              0xe000 boot_app0.bin \
+              0x10000 firmware.bin \
+              0x310000 spiffs.bin
